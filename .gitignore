@@ -1,5 +1,10 @@
 build/
+deps/
+deploy/lib/
+docker/r328-sdk/
 *.o
 *.so
+*.so.*
+*.a
 xiaozhi-r328
 /test_*
