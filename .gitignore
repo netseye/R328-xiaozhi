@@ -1,0 +1,5 @@
+build/
+*.o
+*.so
+xiaozhi-r328
+test_*

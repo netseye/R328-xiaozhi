@@ -1,0 +1,17 @@
+{
+  "wifi_ssid": "YOUR_WIFI_SSID",
+  "wifi_password": "YOUR_WIFI_PASSWORD",
+  "xiaozhi_token": "Bearer YOUR_TOKEN_HERE",
+  "xiaozhi_url": "wss://api.xiaozhi.me/v1/ws",
+  "device_id": "AA:BB:CC:DD:EE:FF",
+  "client_id": "r328-0001",
+  "audio": {
+    "capture_device": "hw:0,0",
+    "playback_device": "hw:0,0",
+    "sample_rate": 16000,
+    "channels": 1,
+    "frame_duration_ms": 60
+  },
+  "mode": "manual",
+  "log_level": "info"
+}
