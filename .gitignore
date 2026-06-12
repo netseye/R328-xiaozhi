@@ -2,4 +2,4 @@ build/
 *.o
 *.so
 xiaozhi-r328
-test_*
+/test_*
