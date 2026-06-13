@@ -4,10 +4,16 @@ set -e
 # Download musl toolchain if not present
 TOOLCHAIN_DIR=/opt/arm-linux-musleabihf-cross
 if [ ! -d "$TOOLCHAIN_DIR" ]; then
-    echo "=== Downloading musl toolchain ==="
-    wget -q https://musl.cc/arm-linux-musleabihf-cross.tgz
-    tar xzf arm-linux-musleabihf-cross.tgz -C /opt
-    rm arm-linux-musleabihf-cross.tgz
+    echo "=== Setting up musl toolchain ==="
+    if [ -f /src/docker/arm-linux-musleabihf-cross.tgz ]; then
+        echo "Using bundled toolchain"
+        tar xzf /src/docker/arm-linux-musleabihf-cross.tgz -C /opt
+    else
+        echo "Downloading toolchain"
+        wget -q https://musl.cc/arm-linux-musleabihf-cross.tgz
+        tar xzf arm-linux-musleabihf-cross.tgz -C /opt
+        rm arm-linux-musleabihf-cross.tgz
+    fi
     echo "Toolchain ready"
 fi
 
