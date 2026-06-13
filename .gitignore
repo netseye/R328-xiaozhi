@@ -9,5 +9,6 @@ output/
 *.so.*
 *.a
 xiaozhi-r328
+!/release/xiaozhi-r328
 /test_*
 .DS_Store

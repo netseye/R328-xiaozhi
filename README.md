@@ -46,6 +46,50 @@ adb -s <serial> shell "ping -c 2 api.tenclass.net"
 
 ## 快速开始
 
+有两种方式：
+
+- **不想编译？** 直接用 `release/` 目录下的预编译二进制，跳到 [部署到设备](#部署到设备)
+- **自己编译？** 按 [从源码编译](#从源码编译) 走
+
+### 部署到设备
+
+用仓库里的 `deploy.sh` 一键部署：
+
+```bash
+./deploy.sh <adb-serial>
+```
+
+查看设备序列号：
+
+```bash
+adb devices
+```
+
+脚本会推送 `release/xiaozhi-r328`（或 `output/xiaozhi-r328`）、模型文件和 `config.json` 到设备的 `/mnt/UDISK/`。
+
+### 运行
+
+```bash
+adb -s <serial> shell "cd /mnt/UDISK && ./xiaozhi-r328 -c config.json"
+```
+
+启动后输入命令：
+
+| 命令 | 说明 |
+|------|------|
+| `chat` | 开始语音对话 |
+| `stop` | 中断当前对话 |
+| `status` | 查看当前状态 |
+| `volume 0-31` | 设置音量 |
+| `ota` | 重新注册设备 |
+| `quit` | 退出 |
+
+空闲时说 "Hey Jarvis" 可自动唤醒。
+
+---
+
+## 从源码编译
+
 ### 1. 构建 Docker 镜像
 
 ```bash
