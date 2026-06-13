@@ -6,13 +6,43 @@
 
 ## 前置要求
 
-- 全志 R328 开发板（已刷 Linux 固件，已联网）
+- 全志 R328 开发板（已刷 Linux 固件）
 - 电脑上有 [Docker](https://docs.docker.com/get-docker/) 和 [adb](https://developer.android.com/tools/releases/platform-tools)
 - USB 连接开发板，adb 可识别设备
 
 ```bash
 adb devices   # 确认能看到设备
 ```
+
+## 配置 WiFi 网络
+
+设备通过 `wpa_supplicant` 连接 WiFi。用 adb 配置：
+
+```bash
+# 查看当前 WiFi 配置
+adb -s <serial> shell "cat /etc/wifi/wpa_supplicant.conf"
+
+# 写入你的 WiFi 信息（替换 SSID 和密码）
+adb -s <serial> shell "cat > /etc/wifi/wpa_supplicant.conf << 'EOF'
+ctrl_interface=/etc/wifi/sockets
+update_config=1
+
+network={
+    ssid=\"你的WiFi名称\"
+    psk=\"你的WiFi密码\"
+    key_mgmt=WPA-PSK
+}
+EOF"
+
+# 重启 WiFi 连接
+adb -s <serial> shell "killall wpa_supplicant; sleep 1; wpa_supplicant -B -i wlan0 -c /etc/wifi/wpa_supplicant.conf"
+adb -s <serial> shell "udhcpc -i wlan0"
+
+# 验证网络
+adb -s <serial> shell "ping -c 2 api.tenclass.net"
+```
+
+也可以用有线网络（如果开发板有网口），插上网线后会自动获取 IP。
 
 ## 快速开始
 
