@@ -35,6 +35,8 @@ static xz_cli_command_t parse_line(const char *line) {
     } else if (strncmp(buf, "volume ", 7) == 0) {
         cmd.cmd = XZ_CMD_VOLUME;
         strncpy(cmd.arg, buf + 7, sizeof(cmd.arg) - 1);
+    } else if (strcmp(buf, "ota") == 0) {
+        cmd.cmd = XZ_CMD_OTA;
     } else if (strcmp(buf, "quit") == 0 || strcmp(buf, "q") == 0) {
         cmd.cmd = XZ_CMD_QUIT;
     } else if (strcmp(buf, "help") == 0) {
@@ -61,5 +63,6 @@ void xz_cli_print_help(void) {
     printf("  stop            Abort current conversation\n");
     printf("  status          Show current state\n");
     printf("  volume <0-31>   Set playback volume\n");
+    printf("  ota             Register device via OTA\n");
     printf("  quit            Exit program\n");
 }

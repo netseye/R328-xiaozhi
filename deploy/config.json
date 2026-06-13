@@ -1,17 +1,25 @@
 {
-  "wifi_ssid": "YOUR_WIFI_SSID",
-  "wifi_password": "YOUR_WIFI_PASSWORD",
-  "xiaozhi_token": "Bearer YOUR_TOKEN_HERE",
-  "xiaozhi_url": "wss://api.xiaozhi.me/v1/ws",
-  "device_id": "AA:BB:CC:DD:EE:FF",
-  "client_id": "r328-0001",
-  "audio": {
-    "capture_device": "hw:0,0",
-    "playback_device": "hw:0,0",
-    "sample_rate": 16000,
-    "channels": 1,
-    "frame_duration_ms": 60
+  "SYSTEM_OPTIONS": {
+    "CLIENT_ID": "b0b3a990-a47f-4267-9848-a1456ed7ff8e",
+    "DEVICE_ID": "04:e2:29:e2:56:67",
+    "NETWORK": {
+      "OTA_VERSION_URL": "https://api.tenclass.net/xiaozhi/ota/",
+      "WEBSOCKET_URL": "wss://api.tenclass.net/xiaozhi/v1/",
+      "WEBSOCKET_ACCESS_TOKEN": "test-token",
+      "ACTIVATION_VERSION": "v2",
+      "AUTHORIZATION_URL": "https://xiaozhi.me/"
+    }
   },
-  "mode": "manual",
-  "log_level": "info"
+  "AUDIO_DEVICES": {
+    "input_device_name": "hw:0,0",
+    "output_device_name": "hw:0,0",
+    "input_sample_rate": 16000,
+    "output_sample_rate": 24000,
+    "input_channels": 1,
+    "output_channels": 1
+  },
+  "WAKE_WORD": {
+    "model": "models/hey_jarvis.tflite",
+    "threshold": 0.97
+  }
 }

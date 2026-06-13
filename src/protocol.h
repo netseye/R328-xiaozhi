@@ -38,10 +38,17 @@ int xz_proto_build_listen(char *buf, int bufsize, const char *session_id,
                            const char *state, const char *mode);
 int xz_proto_build_abort(char *buf, int bufsize, const char *session_id,
                           const char *reason);
+int xz_proto_build_mcp_init_result(char *buf, int bufsize, const char *session_id,
+                                    int jsonrpc_id);
+int xz_proto_build_mcp_initialized(char *buf, int bufsize, const char *session_id);
+int xz_proto_build_mcp_tools_result(char *buf, int bufsize, const char *session_id,
+                                     int jsonrpc_id);
 
 /* Parse incoming messages */
 xz_msg_type_t xz_proto_parse_type(const char *json);
 int xz_proto_parse_hello_ack(const char *json, xz_hello_ack_t *ack);
 int xz_proto_parse_stt(const char *json, xz_stt_t *stt);
+int xz_proto_parse_mcp_init_id(const char *json, int *out_id);
+int xz_proto_parse_mcp_request(const char *json, int *out_id, char *method, int method_sz);
 
 #endif

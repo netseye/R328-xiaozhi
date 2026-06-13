@@ -1,0 +1,93 @@
+{
+  "SYSTEM_OPTIONS": {
+    "CLIENT_ID": "b0b3a990-a47f-4267-9848-a1456ed7ff8e",
+    "DEVICE_ID": "76:fa:51:66:4c:a9",
+    "NETWORK": {
+      "OTA_VERSION_URL": "https://api.tenclass.net/xiaozhi/ota/",
+      "WEBSOCKET_URL": "wss://api.tenclass.net/xiaozhi/v1/",
+      "WEBSOCKET_ACCESS_TOKEN": "",
+      "MQTT_INFO": {
+        "endpoint": "mqtt.xiaozhi.me",
+        "client_id": "GID_test@@@58_02_05_bd_ca_67@@@b0b3a990-a47f-4267-9848-a1456ed7ff8e",
+        "username": "eyJpcCI6IjE4My42LjcuMjUyIn0=",
+        "password": "JQ94t5N3/xJd3t54/FkF3NhpvHL+fwlCxmvjo4nbZQc=",
+        "publish_topic": "device-server",
+        "subscribe_topic": "null"
+      },
+      "ACTIVATION_VERSION": "v2",
+      "AUTHORIZATION_URL": "https://xiaozhi.me/"
+    }
+  },
+  "WAKE_WORD_OPTIONS": {
+    "USE_WAKE_WORD": true,
+    "MODEL_PATH": "models",
+    "NUM_THREADS": 4,
+    "PROVIDER": "cpu",
+    "MAX_ACTIVE_PATHS": 2,
+    "KEYWORDS_SCORE": 1.8,
+    "KEYWORDS_THRESHOLD": 0.2,
+    "NUM_TRAILING_BLANKS": 1
+  },
+  "CAMERA": {
+    "camera_index": 0,
+    "frame_width": 640,
+    "frame_height": 480,
+    "fps": 30,
+    "Local_VL_url": "https://open.bigmodel.cn/api/paas/v4/",
+    "VLapi_key": "",
+    "models": "glm-4v-plus"
+  },
+  "SHORTCUTS": {
+    "ENABLED": true,
+    "MANUAL_PRESS": {
+      "modifier": "ctrl",
+      "key": "j",
+      "description": "按住说话"
+    },
+    "AUTO_TOGGLE": {
+      "modifier": "ctrl",
+      "key": "k",
+      "description": "自动对话"
+    },
+    "ABORT": {
+      "modifier": "ctrl",
+      "key": "q",
+      "description": "中断对话"
+    },
+    "MODE_TOGGLE": {
+      "modifier": "ctrl",
+      "key": "m",
+      "description": "切换模式"
+    },
+    "WINDOW_TOGGLE": {
+      "modifier": "ctrl",
+      "key": "w",
+      "description": "显示/隐藏窗口"
+    }
+  },
+  "AEC_OPTIONS": {
+    "ENABLED": false,
+    "BUFFER_MAX_LENGTH": 200,
+    "FRAME_DELAY": 3,
+    "FILTER_LENGTH_RATIO": 0.4,
+    "ENABLE_PREPROCESS": true
+  },
+  "AUDIO_DEVICES": {
+    "input_device_id": 3,
+    "input_device_name": "hw:0,0",
+    "output_device_id": 0,
+    "output_device_name": "hw:0,0",
+    "input_sample_rate": 16000,
+    "output_sample_rate": 24000,
+    "input_channels": 1,
+    "output_channels": 1
+  },
+  "WECHAT_OPTIONS": {
+    "ENABLED": false,
+    "BASE_URL": "https://ilinkai.weixin.qq.com",
+    "BOT_TYPE": "3",
+    "AUTO_RECONNECT": true,
+    "RECONNECT_INTERVAL": 5,
+    "MESSAGE_TIMEOUT": 30
+  }
+}

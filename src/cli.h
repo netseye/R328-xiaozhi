@@ -8,6 +8,7 @@ typedef enum {
     XZ_CMD_STOP,
     XZ_CMD_STATUS,
     XZ_CMD_VOLUME,
+    XZ_CMD_OTA,
     XZ_CMD_QUIT,
     XZ_CMD_UNKNOWN
 } xz_cmd_t;

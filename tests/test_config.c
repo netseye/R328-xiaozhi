@@ -83,12 +83,41 @@ TEST(load_from_file) {
     remove(tmp);
 }
 
+TEST(parse_nested_format) {
+    const char *json =
+        "{"
+        "  \"SYSTEM_OPTIONS\": {"
+        "    \"CLIENT_ID\": \"b0b3a990-a47f-4267-9848-a1456ed7ff8e\","
+        "    \"DEVICE_ID\": \"58:02:05:bd:ca:67\","
+        "    \"NETWORK\": {"
+        "      \"OTA_VERSION_URL\": \"https://api.tenclass.net/xiaozhi/ota/\","
+        "      \"WEBSOCKET_URL\": \"wss://api.tenclass.net/xiaozhi/v1/\","
+        "      \"WEBSOCKET_ACCESS_TOKEN\": \"test-token\""
+        "    }"
+        "  },"
+        "  \"AUDIO_DEVICES\": {"
+        "    \"input_sample_rate\": 16000,"
+        "    \"input_channels\": 1"
+        "  }"
+        "}";
+    xz_config_t cfg;
+    int rc = xz_config_parse(json, &cfg);
+    ASSERT_EQ_INT(rc, 0);
+    ASSERT_EQ_STR(cfg.client_id, "b0b3a990-a47f-4267-9848-a1456ed7ff8e");
+    ASSERT_EQ_STR(cfg.device_id, "58:02:05:bd:ca:67");
+    ASSERT_EQ_STR(cfg.ota_url, "https://api.tenclass.net/xiaozhi/ota/");
+    ASSERT_EQ_STR(cfg.xiaozhi_url, "wss://api.tenclass.net/xiaozhi/v1/");
+    ASSERT_EQ_STR(cfg.xiaozhi_token, "test-token");
+    ASSERT_EQ_INT(cfg.audio_sample_rate, 16000);
+}
+
 static void run_tests(void) {
     RUN_TEST(parse_valid_config);
     RUN_TEST(parse_invalid_json);
     RUN_TEST(parse_missing_fields);
     RUN_TEST(parse_defaults);
     RUN_TEST(load_from_file);
+    RUN_TEST(parse_nested_format);
 }
 
 TEST_MAIN()

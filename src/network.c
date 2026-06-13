@@ -121,6 +121,20 @@ static void base64_encode(const uint8_t *in, int len, char *out) {
     *out = '\0';
 }
 
+static void get_random_bytes(uint8_t *buf, int len) {
+    FILE *f = fopen("/dev/urandom", "rb");
+    if (f) {
+        fread(buf, 1, len, f);
+        fclose(f);
+    } else {
+        for (int i = 0; i < len; i++) buf[i] = rand() & 0xFF;
+    }
+}
+
+static void ws_mask_payload(uint8_t *payload, int len, const uint8_t mask[4]) {
+    for (int i = 0; i < len; i++) payload[i] ^= mask[i & 3];
+}
+
 static int ws_do_handshake(xz_net_t *n) {
     char host[256], path[512];
     int use_ssl, port;
@@ -134,32 +148,57 @@ static int ws_do_handshake(xz_net_t *n) {
     if (use_ssl) {
         n->ssl_ctx = SSL_CTX_new(SSLv23_client_method());
         if (!n->ssl_ctx) return -1;
+        SSL_CTX_set_verify(n->ssl_ctx, SSL_VERIFY_NONE, NULL);
         n->ssl = SSL_new(n->ssl_ctx);
         SSL_set_fd(n->ssl, n->fd);
         SSL_set_tlsext_host_name(n->ssl, host);
         if (SSL_connect(n->ssl) != 1) return -1;
+        fprintf(stderr, "[SSL] Version: %s, Cipher: %s\n",
+                SSL_get_version(n->ssl), SSL_get_cipher(n->ssl));
     }
 
     uint8_t nonce[16];
-    for (int i = 0; i < 16; i++) nonce[i] = rand() & 0xFF;
+    get_random_bytes(nonce, 16);
     char nonce_b64[32];
     base64_encode(nonce, 16, nonce_b64);
 
     char req[2048];
-    int rlen = snprintf(req, sizeof(req),
-        "GET %s HTTP/1.1\r\n"
-        "Host: %s:%d\r\n"
-        "Upgrade: websocket\r\n"
-        "Connection: Upgrade\r\n"
-        "Sec-WebSocket-Key: %s\r\n"
-        "Sec-WebSocket-Version: 13\r\n"
-        "Authorization: %s\r\n"
-        "Protocol-Version: 1\r\n"
-        "Device-Id: %s\r\n"
-        "Client-Id: %s\r\n"
-        "\r\n",
-        path, host, port, nonce_b64,
-        n->config.token, n->config.device_id, n->config.client_id);
+    fprintf(stderr, "[WS] Connecting to %s:%d path=%s token=%.20s...\n",
+            host, port, path, n->config.token);
+
+    int rlen;
+    const char *host_hdr = (use_ssl && port == 443) ? host : NULL;
+    if (!host_hdr) host_hdr = host; /* fallback */
+    if (n->config.token[0] && strcmp(n->config.token, "test-token") != 0) {
+        rlen = snprintf(req, sizeof(req),
+            "GET %s HTTP/1.1\r\n"
+            "Host: %s\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            "Sec-WebSocket-Key: %s\r\n"
+            "Sec-WebSocket-Version: 13\r\n"
+            "Authorization: Bearer %s\r\n"
+            "Protocol-Version: 1\r\n"
+            "Device-Id: %s\r\n"
+            "Client-Id: %s\r\n"
+            "\r\n",
+            path, host_hdr, nonce_b64,
+            n->config.token, n->config.device_id, n->config.client_id);
+    } else {
+        rlen = snprintf(req, sizeof(req),
+            "GET %s HTTP/1.1\r\n"
+            "Host: %s\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            "Sec-WebSocket-Key: %s\r\n"
+            "Sec-WebSocket-Version: 13\r\n"
+            "Protocol-Version: 1\r\n"
+            "Device-Id: %s\r\n"
+            "Client-Id: %s\r\n"
+            "\r\n",
+            path, host_hdr, nonce_b64,
+            n->config.device_id, n->config.client_id);
+    }
 
     if (use_ssl) {
         SSL_write(n->ssl, req, rlen);
@@ -192,6 +231,7 @@ static int ws_do_handshake(xz_net_t *n) {
     }
 
     n->connected = 1;
+    if (n->cbs.on_connect) n->cbs.on_connect(n->cbs.user_data);
     return 0;
 }
 
@@ -206,6 +246,7 @@ static int net_write(xz_net_t *n, const uint8_t *buf, int len) {
 }
 
 static void ws_handle_frame(xz_net_t *n, int opcode, const uint8_t *data, int len) {
+    fprintf(stderr, "[WS-FRAME] opcode=%d len=%d\n", opcode, len);
     switch (opcode) {
     case WS_OPCODE_TEXT:
         if (n->cbs.on_text) {
@@ -229,6 +270,17 @@ static void ws_handle_frame(xz_net_t *n, int opcode, const uint8_t *data, int le
         break;
     }
     case WS_OPCODE_CLOSE:
+        if (len >= 2) {
+            int close_code = (data[0] << 8) | data[1];
+            fprintf(stderr, "[WS-CLOSE] code=%d reason=", close_code);
+            for (int i = 2; i < len && i < 40; i++) {
+                if (data[i] >= 32 && data[i] < 127) fprintf(stderr, "%c", data[i]);
+                else fprintf(stderr, "\\x%02x", data[i]);
+            }
+            fprintf(stderr, "\n");
+        } else {
+            fprintf(stderr, "[WS-CLOSE] no payload (len=%d)\n", len);
+        }
         n->connected = 0;
         if (n->cbs.on_disconnect) n->cbs.on_disconnect(n->cbs.user_data);
         break;
@@ -252,17 +304,42 @@ int xz_net_connect(xz_net_t *n) {
 void xz_net_service(xz_net_t *n, int timeout_ms) {
     if (!n || !n->connected) return;
 
-    struct timeval tv = { .tv_sec = timeout_ms / 1000,
-                          .tv_usec = (timeout_ms % 1000) * 1000 };
-    fd_set rfds;
-    FD_ZERO(&rfds);
-    FD_SET(n->fd, &rfds);
-    if (select(n->fd + 1, &rfds, NULL, NULL, &tv) <= 0) return;
+    /* Always try SSL_read first — OpenSSL may have buffered data
+       that select() cannot see (SSL internal buffer). */
+    if (n->ssl && SSL_pending(n->ssl) > 0) {
+        int r = SSL_read(n->ssl, n->recv_buf + n->recv_len,
+                         sizeof(n->recv_buf) - n->recv_len);
+        if (r > 0) n->recv_len += r;
+    }
+
+    if (n->recv_len < (int)sizeof(n->recv_buf) - 256) {
+        struct timeval tv = { .tv_sec = timeout_ms / 1000,
+                              .tv_usec = (timeout_ms % 1000) * 1000 };
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(n->fd, &rfds);
+        if (select(n->fd + 1, &rfds, NULL, NULL, &tv) > 0) {
+            int r = net_read(n, n->recv_buf + n->recv_len,
+                             sizeof(n->recv_buf) - n->recv_len);
+            if (r > 0) {
+                n->recv_len += r;
+                fprintf(stderr, "[WS-READ] %d bytes, total buf=%d\n", r, n->recv_len);
+            } else if (r == 0) {
+                fprintf(stderr, "[WS-READ] connection closed by peer (read=0)\n");
+                n->connected = 0;
+                if (n->cbs.on_disconnect) n->cbs.on_disconnect(n->cbs.user_data);
+                return;
+            }
+        }
+    }
 
     while (n->connected) {
         if (n->recv_len < 2) break;
 
         uint8_t *p = n->recv_buf;
+        fprintf(stderr, "[WS-PARSE] buf=%d bytes, hdr=%02x %02x", n->recv_len, p[0], p[1]);
+        if (n->recv_len > 2) fprintf(stderr, " %02x %02x", p[2], p[3]);
+        fprintf(stderr, "\n");
         int fin = p[0] & WS_FIN_BIT;
         int opcode = p[0] & 0x0F;
         int masked = p[1] & 0x80;
@@ -300,13 +377,6 @@ void xz_net_service(xz_net_t *n, int timeout_ms) {
         n->recv_len = remaining;
 
         if (!fin) continue;
-        break;
-    }
-
-    if (n->recv_len < (int)sizeof(n->recv_buf) - 256) {
-        int r = net_read(n, n->recv_buf + n->recv_len,
-                         sizeof(n->recv_buf) - n->recv_len);
-        if (r > 0) n->recv_len += r;
     }
 }
 
@@ -316,21 +386,31 @@ int xz_net_send_binary(xz_net_t *n, const uint8_t *data, int len) {
     int hdrlen = 0;
     hdr[0] = WS_FIN_BIT | WS_OPCODE_BIN;
     if (len < 126) {
-        hdr[1] = len;
+        hdr[1] = 0x80 | len;
         hdrlen = 2;
     } else if (len < 65536) {
-        hdr[1] = 126;
+        hdr[1] = 0x80 | 126;
         hdr[2] = (len >> 8) & 0xFF;
         hdr[3] = len & 0xFF;
         hdrlen = 4;
     } else {
-        hdr[1] = 127;
+        hdr[1] = 0x80 | 127;
         for (int i = 0; i < 8; i++)
             hdr[9 - i] = (len >> (i * 8)) & 0xFF;
         hdrlen = 10;
     }
-    net_write(n, hdr, hdrlen);
-    return net_write(n, data, len) == len ? 0 : -1;
+    uint8_t mask[4];
+    get_random_bytes(mask, 4);
+    int frame_len = hdrlen + 4 + len;
+    uint8_t *frame = malloc(frame_len);
+    if (!frame) return -1;
+    memcpy(frame, hdr, hdrlen);
+    memcpy(frame + hdrlen, mask, 4);
+    memcpy(frame + hdrlen + 4, data, len);
+    ws_mask_payload(frame + hdrlen + 4, len, mask);
+    int rc = net_write(n, frame, frame_len) == frame_len ? 0 : -1;
+    free(frame);
+    return rc;
 }
 
 int xz_net_send_text(xz_net_t *n, const char *json) {
@@ -340,18 +420,30 @@ int xz_net_send_text(xz_net_t *n, const char *json) {
     int hdrlen = 0;
     hdr[0] = WS_FIN_BIT | WS_OPCODE_TEXT;
     if (len < 126) {
-        hdr[1] = len;
+        hdr[1] = 0x80 | len;
         hdrlen = 2;
     } else if (len < 65536) {
-        hdr[1] = 126;
+        hdr[1] = 0x80 | 126;
         hdr[2] = (len >> 8) & 0xFF;
         hdr[3] = len & 0xFF;
         hdrlen = 4;
     } else {
         return -1;
     }
-    net_write(n, hdr, hdrlen);
-    return net_write(n, (const uint8_t *)json, len) == len ? 0 : -1;
+    uint8_t mask[4];
+    get_random_bytes(mask, 4);
+    int frame_len = hdrlen + 4 + len;
+    uint8_t *frame = malloc(frame_len);
+    if (!frame) return -1;
+    memcpy(frame, hdr, hdrlen);
+    memcpy(frame + hdrlen, mask, 4);
+    memcpy(frame + hdrlen + 4, json, len);
+    ws_mask_payload(frame + hdrlen + 4, len, mask);
+    fprintf(stderr, "[WS-TX] %d bytes: hdr=%02x %02x mask=%02x%02x%02x%02x payload_len=%d\n",
+            frame_len, frame[0], frame[1], mask[0], mask[1], mask[2], mask[3], len);
+    int rc = net_write(n, frame, frame_len) == frame_len ? 0 : -1;
+    free(frame);
+    return rc;
 }
 
 void xz_net_disconnect(xz_net_t *n) {

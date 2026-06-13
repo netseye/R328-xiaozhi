@@ -2,9 +2,12 @@ build/
 deps/
 deploy/lib/
 docker/r328-sdk/
+docker/arm-linux-musleabihf-cross.tgz
+output/
 *.o
 *.so
 *.so.*
 *.a
 xiaozhi-r328
 /test_*
+.DS_Store

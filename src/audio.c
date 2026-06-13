@@ -13,8 +13,10 @@ struct xz_audio_t {
     snd_pcm_t *playback_pcm;
     OpusEncoder *encoder;
     OpusDecoder *decoder;
-    int16_t *pcm_buffer;
+    int16_t *capture_buf;
+    int16_t *playback_buf;
     int frame_samples;
+    int playback_frame_samples;
     int capturing;
     int playing;
 };
@@ -24,22 +26,26 @@ xz_audio_t *xz_audio_create(const xz_audio_config_t *cfg) {
     if (!a) return NULL;
 
     a->frame_samples = cfg->sample_rate * cfg->frame_ms / 1000;
-    a->pcm_buffer = malloc(a->frame_samples * sizeof(int16_t));
-    if (!a->pcm_buffer) { free(a); return NULL; }
+    a->playback_frame_samples = cfg->output_sample_rate * cfg->frame_ms / 1000;
+    a->capture_buf = malloc(a->frame_samples * sizeof(int16_t));
+    a->playback_buf = malloc(a->playback_frame_samples * sizeof(int16_t));
+    if (!a->capture_buf || !a->playback_buf) {
+        free(a->capture_buf); free(a->playback_buf); free(a); return NULL;
+    }
 
     int err;
     a->encoder = opus_encoder_create(cfg->sample_rate, cfg->channels,
                                       OPUS_APPLICATION_VOIP, &err);
     if (err != OPUS_OK) {
         fprintf(stderr, "opus_encoder_create failed: %s\n", opus_strerror(err));
-        free(a->pcm_buffer); free(a); return NULL;
+        free(a->capture_buf); free(a->playback_buf); free(a); return NULL;
     }
 
-    a->decoder = opus_decoder_create(cfg->sample_rate, cfg->channels, &err);
+    a->decoder = opus_decoder_create(cfg->output_sample_rate, cfg->channels, &err);
     if (err != OPUS_OK) {
         fprintf(stderr, "opus_decoder_create failed: %s\n", opus_strerror(err));
         opus_encoder_destroy(a->encoder);
-        free(a->pcm_buffer); free(a); return NULL;
+        free(a->capture_buf); free(a->playback_buf); free(a); return NULL;
     }
 
     err = snd_pcm_open(&a->capture_pcm, cfg->capture_dev,
@@ -76,14 +82,18 @@ xz_audio_t *xz_audio_create(const xz_audio_config_t *cfg) {
     snd_pcm_hw_params_set_access(a->playback_pcm, params, SND_PCM_ACCESS_RW_INTERLEAVED);
     snd_pcm_hw_params_set_format(a->playback_pcm, params, SND_PCM_FORMAT_S16_LE);
     snd_pcm_hw_params_set_channels(a->playback_pcm, params, cfg->channels);
-    rate = cfg->sample_rate;
+    rate = cfg->output_sample_rate;
     snd_pcm_hw_params_set_rate_near(a->playback_pcm, params, &rate, 0);
-    snd_pcm_hw_params_set_period_size(a->playback_pcm, params, a->frame_samples, 0);
+    snd_pcm_hw_params_set_period_size(a->playback_pcm, params, a->playback_frame_samples, 0);
     err = snd_pcm_hw_params(a->playback_pcm, params);
     if (err < 0) {
         fprintf(stderr, "snd_pcm_hw_params playback failed: %s\n", snd_strerror(err));
         goto fail;
     }
+
+    system("amixer cset numid=8 on");    /* Spk PA Switch */
+    system("amixer cset numid=10 on");   /* Lineout Switch */
+    system("amixer cset numid=2 63");    /* digital volume max */
 
     return a;
 
@@ -92,7 +102,8 @@ fail:
     if (a->playback_pcm) snd_pcm_close(a->playback_pcm);
     opus_encoder_destroy(a->encoder);
     opus_decoder_destroy(a->decoder);
-    free(a->pcm_buffer);
+    free(a->capture_buf);
+    free(a->playback_buf);
     free(a);
     return NULL;
 }
@@ -105,7 +116,8 @@ void xz_audio_destroy(xz_audio_t *a) {
     if (a->playback_pcm) snd_pcm_close(a->playback_pcm);
     opus_encoder_destroy(a->encoder);
     opus_decoder_destroy(a->decoder);
-    free(a->pcm_buffer);
+    free(a->capture_buf);
+    free(a->playback_buf);
     free(a);
 }
 
@@ -125,13 +137,24 @@ void xz_audio_stop_capture(xz_audio_t *a) {
 
 int xz_audio_read_opus(xz_audio_t *a, uint8_t *buf, int bufsize) {
     if (!a || !a->capturing) return -1;
-    int frames = snd_pcm_readi(a->capture_pcm, a->pcm_buffer, a->frame_samples);
+    int frames = snd_pcm_readi(a->capture_pcm, a->capture_buf, a->frame_samples);
     if (frames < 0) {
         frames = snd_pcm_recover(a->capture_pcm, frames, 0);
         if (frames < 0) return -1;
     }
-    int nbytes = opus_encode(a->encoder, a->pcm_buffer, frames, buf, bufsize);
+    int nbytes = opus_encode(a->encoder, a->capture_buf, frames, buf, bufsize);
     return (nbytes < 0) ? -1 : nbytes;
+}
+
+int xz_audio_read_pcm(xz_audio_t *a, int16_t *buf, int max_samples) {
+    if (!a || !a->capturing) return -1;
+    int to_read = max_samples < a->frame_samples ? max_samples : a->frame_samples;
+    int frames = snd_pcm_readi(a->capture_pcm, buf, to_read);
+    if (frames < 0) {
+        frames = snd_pcm_recover(a->capture_pcm, frames, 0);
+        if (frames < 0) return -1;
+    }
+    return frames;
 }
 
 int xz_audio_start_playback(xz_audio_t *a) {
@@ -150,9 +173,9 @@ void xz_audio_stop_playback(xz_audio_t *a) {
 
 int xz_audio_play_opus(xz_audio_t *a, const uint8_t *data, int len) {
     if (!a || !a->playing) return -1;
-    int frames = opus_decode(a->decoder, data, len, a->pcm_buffer, a->frame_samples, 0);
+    int frames = opus_decode(a->decoder, data, len, a->playback_buf, a->playback_frame_samples, 0);
     if (frames < 0) return -1;
-    int played = snd_pcm_writei(a->playback_pcm, a->pcm_buffer, frames);
+    int played = snd_pcm_writei(a->playback_pcm, a->playback_buf, frames);
     if (played < 0) {
         played = snd_pcm_recover(a->playback_pcm, played, 0);
         if (played < 0) return -1;
@@ -176,6 +199,7 @@ void xz_audio_destroy(xz_audio_t *a) { free(a); }
 int xz_audio_start_capture(xz_audio_t *a) { (void)a; return 0; }
 void xz_audio_stop_capture(xz_audio_t *a) { (void)a; }
 int xz_audio_read_opus(xz_audio_t *a, uint8_t *buf, int bufsize) { (void)a; (void)buf; (void)bufsize; return 0; }
+int xz_audio_read_pcm(xz_audio_t *a, int16_t *buf, int max_samples) { (void)a; (void)buf; (void)max_samples; return 0; }
 int xz_audio_start_playback(xz_audio_t *a) { (void)a; return 0; }
 void xz_audio_stop_playback(xz_audio_t *a) { (void)a; }
 int xz_audio_play_opus(xz_audio_t *a, const uint8_t *data, int len) { (void)a; (void)data; (void)len; return 0; }

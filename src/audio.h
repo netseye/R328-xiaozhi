@@ -13,6 +13,7 @@
 
 typedef struct {
     int sample_rate;
+    int output_sample_rate;
     int channels;
     int frame_ms;
     char capture_dev[64];
@@ -26,6 +27,7 @@ void xz_audio_destroy(xz_audio_t *a);
 int xz_audio_start_capture(xz_audio_t *a);
 void xz_audio_stop_capture(xz_audio_t *a);
 int xz_audio_read_opus(xz_audio_t *a, uint8_t *buf, int bufsize);
+int xz_audio_read_pcm(xz_audio_t *a, int16_t *buf, int max_samples);
 int xz_audio_play_opus(xz_audio_t *a, const uint8_t *data, int len);
 int xz_audio_start_playback(xz_audio_t *a);
 void xz_audio_stop_playback(xz_audio_t *a);

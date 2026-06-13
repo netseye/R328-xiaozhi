@@ -6,6 +6,7 @@
 int xz_proto_build_hello(char *buf, int bufsize) {
     int len = snprintf(buf, bufsize,
         "{\"type\":\"hello\",\"version\":1,\"transport\":\"websocket\","
+        "\"features\":{\"mcp\":true},"
         "\"audio_params\":{\"format\":\"opus\",\"sample_rate\":16000,"
         "\"channels\":1,\"frame_duration\":60}}");
     return (len >= bufsize) ? -1 : len;
@@ -115,4 +116,76 @@ int xz_proto_parse_stt(const char *json, xz_stt_t *stt) {
 
     cJSON_Delete(root);
     return rc;
+}
+
+int xz_proto_parse_mcp_init_id(const char *json, int *out_id) {
+    cJSON *root = cJSON_Parse(json);
+    if (!root) return -1;
+
+    const cJSON *payload = cJSON_GetObjectItemCaseSensitive(root, "payload");
+    if (!payload) { cJSON_Delete(root); return -1; }
+
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(payload, "id");
+    if (cJSON_IsNumber(id)) {
+        *out_id = id->valueint;
+        cJSON_Delete(root);
+        return 0;
+    }
+
+    cJSON_Delete(root);
+    return -1;
+}
+
+int xz_proto_parse_mcp_request(const char *json, int *out_id, char *method, int method_sz) {
+    cJSON *root = cJSON_Parse(json);
+    if (!root) return -1;
+
+    const cJSON *payload = cJSON_GetObjectItemCaseSensitive(root, "payload");
+    if (!payload) { cJSON_Delete(root); return -1; }
+
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(payload, "id");
+    if (!cJSON_IsNumber(id)) { cJSON_Delete(root); return -1; }
+    *out_id = id->valueint;
+
+    const cJSON *m = cJSON_GetObjectItemCaseSensitive(payload, "method");
+    if (cJSON_IsString(m) && m->valuestring) {
+        strncpy(method, m->valuestring, method_sz - 1);
+        method[method_sz - 1] = '\0';
+    } else {
+        method[0] = '\0';
+    }
+
+    cJSON_Delete(root);
+    return 0;
+}
+
+int xz_proto_build_mcp_init_result(char *buf, int bufsize, const char *session_id,
+                                    int jsonrpc_id) {
+    int len = snprintf(buf, bufsize,
+        "{\"type\":\"mcp\",\"session_id\":\"%s\","
+        "\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,"
+        "\"result\":{\"protocolVersion\":\"2024-11-05\","
+        "\"capabilities\":{},"
+        "\"serverInfo\":{\"name\":\"xiaozhi-r328\",\"version\":\"1.0.0\"}}}}",
+        session_id, jsonrpc_id);
+    return (len >= bufsize) ? -1 : len;
+}
+
+int xz_proto_build_mcp_initialized(char *buf, int bufsize, const char *session_id) {
+    int len = snprintf(buf, bufsize,
+        "{\"type\":\"mcp\",\"session_id\":\"%s\","
+        "\"payload\":{\"jsonrpc\":\"2.0\","
+        "\"method\":\"notifications/initialized\"}}",
+        session_id);
+    return (len >= bufsize) ? -1 : len;
+}
+
+int xz_proto_build_mcp_tools_result(char *buf, int bufsize, const char *session_id,
+                                     int jsonrpc_id) {
+    int len = snprintf(buf, bufsize,
+        "{\"type\":\"mcp\",\"session_id\":\"%s\","
+        "\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,"
+        "\"result\":{\"tools\":[]}}}",
+        session_id, jsonrpc_id);
+    return (len >= bufsize) ? -1 : len;
 }
